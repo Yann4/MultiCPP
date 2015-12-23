@@ -1,5 +1,4 @@
 #include <string>
-using std::string;
 #include <iostream>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
@@ -7,10 +6,10 @@ using std::string;
 
 namespace Socket
 {
-	const string DEFAULT_PORT = "10001";
+	const std::string DEFAULT_PORT = "10001";
 	const int DEFAULT_BUFLEN = 512;
 
-	SOCKET createSocket(string port = DEFAULT_PORT)
+	SOCKET createSocket(std::string port = DEFAULT_PORT)
 	{
 		//Create socket
 		struct addrinfo *result = nullptr, hints;
@@ -45,7 +44,7 @@ namespace Socket
 
 		if (retResult == SOCKET_ERROR)
 		{
-			std::cout << "bind() failed with error: " << WSAGetLastError();
+			std::cerr << "bind() failed with error: " << WSAGetLastError();
 			FreeAddrInfo(result);
 			closesocket(sock);
 			WSACleanup();
@@ -68,7 +67,7 @@ namespace Socket
 		int iRes = getaddrinfo(serverName.c_str(), port.c_str(), &hints, &result);
 		if (iRes != 0)
 		{
-			std::cout << "getaddrinfo failed with error " << iRes;
+			std::cerr << "getaddrinfo failed with error " << iRes;
 			WSACleanup();
 			return 1;
 		}
@@ -78,7 +77,7 @@ namespace Socket
 			connection = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
 			if (connection == INVALID_SOCKET)
 			{
-				std::cout << "socket failed with error " << WSAGetLastError();
+				std::cerr << "socket failed with error " << WSAGetLastError();
 				WSACleanup();
 				return 1;
 			}
@@ -96,7 +95,7 @@ namespace Socket
 		freeaddrinfo(result);
 		if (connection == INVALID_SOCKET)
 		{
-			std::cout << "Unable to connect to server";
+			std::cerr << "Unable to connect to server";
 			WSACleanup();
 			return 1;
 		}
@@ -104,44 +103,46 @@ namespace Socket
 		return connection;
 	}
 
-	int listenTo(SOCKET clientSock)
+	bool listenTo(SOCKET clientSock, std::string& message)
 	{
 		//Recieve and send data
 		char recvbuf[DEFAULT_BUFLEN];
 		int iResult, iSendResult;
 		int recvBufLen = DEFAULT_BUFLEN;
+		std::string recieved = "";
 
-		do
+		//Recieve #iResult bytes from clientSock
+		iResult = recv(clientSock, recvbuf, recvBufLen, 0);
+		if (iResult > 0)
 		{
-			//Recieve #iResult bytes from clientSock
-			iResult = recv(clientSock, recvbuf, recvBufLen, 0);
-			if (iResult > 0)
-			{
-				std::cout << "Bytes recieved: " << iResult;
+			recieved = std::string(recvbuf);
+			recieved = recieved.substr(0, iResult);
 
-				//Echo bytes recieved back to the client
-				iSendResult = send(clientSock, recvbuf, iResult, 0);
-				if (iSendResult == SOCKET_ERROR)
-				{
-					std::cout << "send() failed: " << WSAGetLastError();
-					closesocket(clientSock);
-					WSACleanup();
-					return 1;
-				}
-			}
-			else if (iResult == 0)
+			//Echo bytes recieved back to the client
+			iSendResult = send(clientSock, recvbuf, iResult, 0);
+
+			if (iSendResult == SOCKET_ERROR)
 			{
-				std::cout << "Connection closing";
-			}
-			else
-			{
-				std::cout << "recv() failed: " << WSAGetLastError();
+				std::cerr << "send() failed: " << WSAGetLastError();
 				closesocket(clientSock);
 				WSACleanup();
-				return 1;
+				return false;
 			}
-		} while (iResult > 0);
-
-		return 0;
+		}
+		else if (iResult == 0)
+		{
+			std::cerr << "Connection closing";
+			return false;
+		}
+		else
+		{
+			std::cerr << "recv() failed: " << WSAGetLastError();
+			closesocket(clientSock);
+			WSACleanup();
+			return false;
+		}
+		message = recieved;
+		return true;
 	}
+
 };

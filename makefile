@@ -15,6 +15,8 @@ rm = del
 
 all: server client
 
+cleanmake: clean all
+
 server: $(SERVER_FILES) $(COMMON_HEADERS)
 	$(CPP) $(SERVER_FILES) /Fe$(SERVER_EXE) $(LIB_FILES)
 

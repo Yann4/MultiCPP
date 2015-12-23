@@ -1,6 +1,7 @@
 #include "Socket.h"
 #include <iostream>
 #include <stdio.h>
+#include <string>
 
 int main()
 {
@@ -15,9 +16,22 @@ int main()
 	}
 
 	SOCKET cliSock = Socket::connectTo("localhost", "10001");
-	if (send(cliSock, "Hello", (int)strlen("Hello"), 0) != SOCKET_ERROR)
+
+	std::string message = "";
+
+	while(message != "Quit")
 	{
-		std::cout << "Success?";
+		std::cin >> message;
+		if (send(cliSock, message.c_str(), message.size(), 0) == SOCKET_ERROR)
+		{
+				std::cout << "send error " << WSAGetLastError();
+				closesocket(cliSock);
+				WSACleanup();
+				return 1;
+		}
+
+		char recvBuf[Socket::DEFAULT_BUFLEN];
+		iRes = recv(cliSock, recvBuf, Socket::DEFAULT_BUFLEN, 0);
 	}
 
 	iRes = shutdown(cliSock, SD_SEND);
@@ -29,21 +43,7 @@ int main()
 		return 1;
 	}
 
-	char recvBuf[Socket::DEFAULT_BUFLEN];
-	do
-	{
-		iRes = recv(cliSock, recvBuf, Socket::DEFAULT_BUFLEN, 0);
-		if (iRes > 0)
-		{
-			std::cout << "Bytes recieved: " << iRes << std::endl;
-		}
-		else if (iRes == 0)
-		{
-			std::cout << "Connection closed\n";
-		}
-		else
-			std::cout << "recv failed with error " << WSAGetLastError();
-	} while (iRes > 0);
+
 
 	closesocket(cliSock);
 	WSACleanup();
