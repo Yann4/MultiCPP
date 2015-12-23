@@ -23,16 +23,44 @@ struct Client
 	{	}
 };
 
+struct Message
+{
+	std::string data;
+	int senderID;
+
+	Message():data(""), senderID(-1){}
+
+	Message(std::string data, int senderID): data(data), senderID(senderID){}
+};
+
+std::vector<Client> clients;
+int ticketNumber = 0;
+
+std::vector<std::thread> clientThreads;
+
+void broadcast(Message message)
+{
+	for(int i = 0; i < clients.size(); i++)
+	{
+			if(clients.at(i).id != message.senderID)
+			{
+				std::string mess = std::to_string(message.senderID) + ": " + message.data + "\0";
+				send(clients.at(i).sock, mess.c_str(), mess.length(), 0);
+				std::cout << "Sent to " << i << std::endl;
+			}
+	}
+}
+
 void handleClient(Client client)
 {
-	std::string message;
-	bool success = Socket::listenTo(client.sock, message);
-	std::cout << client.name << ": " << message << std::endl;
+	std::string message = "//";
+	bool success = true;
 
-	while(success && (message != "Quit" || message != ""))
+	while(success && (message != "Quit" && message != ""))
 	{
 			success = Socket::listenTo(client.sock, message);
-			std::cout << client.name << ": " << message << std::endl;
+			std::cout << client.id << ": " << message << std::endl;
+			broadcast(Message(message, client.id));
 	}
 
 	//Shutdown client socket
@@ -47,24 +75,27 @@ void handleClient(Client client)
 
 	//Shutdown recieving data (from client's perspective)
 	closesocket(client.sock);
+
+	//Remove client from list of clients
+	for(int i = 0; i < clients.size(); ++i)
+	{
+			if(clients.at(i).id == client.id)
+			{
+				clients.erase(clients.begin() + i);
+				break;
+			}
+	}
 }
 
-std::vector<Client> clients;
-int ticketNumber = 0;
-
-std::vector<std::thread> clientThreads;
-
-void getNewClients(SOCKET toListen)
+bool getNewClient(SOCKET toListen)
 {
-		while(true)
-		{
 			//Listen on a socket
 			if (listen(toListen, SOMAXCONN) == SOCKET_ERROR)
 			{
 				std::cerr << "Listen failed with error: " << WSAGetLastError();
 				closesocket(toListen);
 				WSACleanup();
-				return;
+				return false;
 			}
 
 			//Accept a connection
@@ -76,13 +107,12 @@ void getNewClients(SOCKET toListen)
 				std::cerr << "accept() failed: " << WSAGetLastError();
 				closesocket(toListen);
 				WSACleanup();
-				return;
+				return false;
 			}
 
 			Client newCli = Client("", ticketNumber++, clientSock);
 			clients.push_back(newCli);
 			clientThreads.push_back(std::thread(handleClient, newCli));
-		}
 }
 
 int main()
@@ -100,9 +130,12 @@ int main()
 
 	while(true)
 	{
-		getNewClients(listenSock);
+		if(!getNewClient(listenSock))
+		{
+			break;
+		}
 	}
-	
+
 	WSACleanup();
 	return 0;
 }

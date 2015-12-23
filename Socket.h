@@ -100,6 +100,8 @@ namespace Socket
 			return 1;
 		}
 
+		u_long iMode = 0;
+		ioctlsocket(connection, FIONBIO, &iMode);
 		return connection;
 	}
 
@@ -136,11 +138,12 @@ namespace Socket
 		}
 		else
 		{
-			std::cerr << "recv() failed: " << WSAGetLastError();
+			std::cerr << "recv() failed: " << WSAGetLastError() << std::endl;
 			closesocket(clientSock);
 			WSACleanup();
 			return false;
 		}
+
 		message = recieved;
 		return true;
 	}
