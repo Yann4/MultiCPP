@@ -5,8 +5,10 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <functional>
+#include <map>
 
-enum Event{NAMECHANGE, SPEAK, ENTER, QUIT};
+enum Event{NAMECHANGE, SPEAK, ENTER, HELP, QUIT};
 struct Client
 {
 	std::string name;
@@ -38,6 +40,7 @@ std::vector<Client> clients;
 int ticketNumber = 0;
 
 std::vector<std::thread> clientThreads;
+std::map<std::string, std::function<Event(std::string, Client)>> actions;
 
 std::string getClientIdentifier(int clientID)
 {
@@ -54,7 +57,7 @@ std::string getClientIdentifier(int clientID)
 			}
 		}
 	}
-	return "-1";
+	return "Server";
 }
 
 void broadcast(Message message)
@@ -70,31 +73,62 @@ void broadcast(Message message)
 	}
 }
 
+void whisper(Message message)
+{
+	std::string mess = getClientIdentifier(-1) + ": " + message.data + "\0";
+
+	for(int i = 0; i < clients.size(); i++)
+	{
+			if(clients.at(i).id == message.senderID)
+			{
+				send(clients.at(i).sock, mess.c_str(), mess.length(), 0);
+				break;
+			}
+	}
+}
+
+Event changeName(std::string message, Client client)
+{
+	for(int i = 0; i < clients.size(); i++)
+	{
+		if(clients.at(i).id == client.id)
+		{
+			//Position 5 should be the beginning of the next word after "/Name"
+			clients.at(i).name = message.substr(5, std::string::npos);
+			std::string shout = "[" + std::to_string(client.id) + "] has changed their name to " + clients.at(i).name;
+			broadcast(Message(shout, -1));
+			return NAMECHANGE;
+		}
+	}
+	return SPEAK;
+}
+
+Event clientExit(std::string message, Client client)
+{
+	broadcast(Message(getClientIdentifier(client.id) + " has left.", -1));
+	return QUIT;
+}
+
+Event sendHelpText(std::string message, Client client)
+{
+	std::string helpText = "Welcome to the server. There are several commands that you can use.\n/Name [NewName here] changes your name\n/Quit to exit\n/Help to see this help text";
+	whisper(Message(helpText, client.id));
+	return HELP;
+}
+
 Event handleMessage(std::string message, Client client)
 {
-	if(message.find("/Name") != std::string::npos)
+	for(auto val : actions)
 	{
-		for(int i = 0; i < clients.size(); i++)
+		if(message.find(val.first) != std::string::npos)
 		{
-			if(clients.at(i).id == client.id)
-			{
-				//Position 5 should be the beginning of the next word after "/Name"
-				clients.at(i).name = message.substr(5, std::string::npos);
-				std::string shout = "[" + std::to_string(client.id) + "] has changed their name to " + clients.at(i).name;
-				broadcast(Message(shout, -1));
-				return SPEAK;
-			}
+			return val.second(message, client);
+			break;
 		}
-		return NAMECHANGE;
-	}else if(message.find("/Quit") != std::string::npos)
-	{
-		broadcast(Message(getClientIdentifier(client.id) + " has left.", -1));
-		return QUIT;
 	}
-	else{
-		broadcast(Message(message, client.id));
-		return SPEAK;
-	}
+
+	broadcast(Message(message, client.id));
+	return SPEAK;
 }
 
 void handleClient(Client client)
@@ -175,6 +209,10 @@ int main()
 
 	//Server
 	SOCKET listenSock = Socket::createSocket("10001");
+
+	actions["/Name"] = changeName;
+	actions["/Quit"] = clientExit;
+	actions["/Help"] = sendHelpText;
 
 	while(true)
 	{
