@@ -1,6 +1,6 @@
-SERVER_FILES=Server.cpp
-CLIENT_FILES=Client.cpp
-COMMON_HEADERS=Socket.h
+COMMON_FILES=Socket.cpp
+SERVER_FILES=Server.cpp Source.cpp $(COMMON_FILES)
+CLIENT_FILES=Client.cpp $(COMMON_FILES)
 
 LIB_FILES=Ws2_32.lib
 
@@ -17,10 +17,10 @@ all: server client
 
 cleanmake: clean all
 
-server: $(SERVER_FILES) $(COMMON_HEADERS)
+server: $(SERVER_FILES) $(COMMON_FILES)
 	$(CPP) $(SERVER_FILES) /Fe$(SERVER_EXE) $(LIB_FILES)
 
-client: $(CLIENT_FILES) $(COMMON_HEADERS)
+client: $(CLIENT_FILES) $(COMMON_FILES)
 	$(CPP) $(CLIENT_FILES) /Fe$(CLIENT_EXE) $(LIB_FILES)
 
 clean:
