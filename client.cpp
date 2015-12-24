@@ -40,9 +40,9 @@ int main()
 	std::thread listenThread = std::thread(recieveMessage, cliSock);
 
 	std::string message = "";
-	while(message != "Quit")
+	while(message.find("/Quit") == std::string::npos)
 	{
-		std::cin >> message;
+		std::getline(std::cin, message);
 		if (send(cliSock, message.c_str(), message.size(), 0) == SOCKET_ERROR)
 		{
 				std::cerr << "send error " << WSAGetLastError();

@@ -113,6 +113,8 @@ namespace Socket
 		int recvBufLen = DEFAULT_BUFLEN;
 		std::string recieved = "";
 
+		if(recieved.find("\n") == std::string::npos)
+		{
 		//Recieve #iResult bytes from clientSock
 		iResult = recv(clientSock, recvbuf, recvBufLen, 0);
 		if (iResult > 0)
@@ -144,7 +146,8 @@ namespace Socket
 			return false;
 		}
 
-		message = recieved;
+		message += recieved;
+		}
 		return true;
 	}
 
