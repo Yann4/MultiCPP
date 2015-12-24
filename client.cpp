@@ -18,7 +18,7 @@ void recieveMessage(SOCKET listenOn)
 			char recvBuf[Socket::DEFAULT_BUFLEN];
 			int iRes = recv(listenOn, recvBuf, Socket::DEFAULT_BUFLEN, 0);
 			std::string message = recvBuf;
-			std::cout << message << std::endl;
+			std::cout << message.substr(0, bytesAvailable) << std::endl;
 		}
 	}
 }
