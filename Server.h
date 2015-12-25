@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 #include <thread>
-#include <functional>
-#include <map>
 #include <atomic>
+#include <map>
+#include <functional>
 
 #include "Socket.h"
 
@@ -26,8 +26,6 @@ struct Client
 	{	}
 };
 
-enum Event{NAME, SPEAK, ENTER, HELP, QUIT};
-
 struct Message
 {
 	std::string data;
@@ -37,6 +35,8 @@ struct Message
 
 	Message(std::string data, int senderID): data(data), senderID(senderID){}
 };
+
+enum Event{NAME, SPEAK, ENTER, HELP, QUIT};
 
 class Server
 {
@@ -48,11 +48,13 @@ private:
     std::thread runThread;
     std::atomic<bool> run;
     SOCKET listenSock;
-    std::map<std::string, std::function<Event(std::string, Client)>> actions;
 
+    std::map<std::string, std::function<Event(std::string, Client)>> actions;
 public:
     Server();
     ~Server();
+
+    void shutdownServer();
 private:
     std::string getClientIdentifier(int clientID);
     bool getNewClient(SOCKET toListen);
@@ -63,7 +65,6 @@ private:
 
     void update();
 
-private:
     Event changeName(std::string message, Client client);
     Event clientExit(std::string message, Client client);
     Event sendHelpText(std::string message, Client client);

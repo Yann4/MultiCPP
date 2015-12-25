@@ -18,10 +18,10 @@ all: server client
 cleanmake: clean all
 
 server: $(SERVER_FILES) $(COMMON_FILES)
-	$(CPP) $(SERVER_FILES) /Fe$(SERVER_EXE) $(LIB_FILES)
+	$(CPP) $(SERVER_FILES) /Fe$(SERVER_EXE) $(LIB_FILES) /EHsc
 
 client: $(CLIENT_FILES) $(COMMON_FILES)
-	$(CPP) $(CLIENT_FILES) /Fe$(CLIENT_EXE) $(LIB_FILES)
+	$(CPP) $(CLIENT_FILES) /Fe$(CLIENT_EXE) $(LIB_FILES) /EHsc
 
 clean:
 	$(rm) $(OBJ_FILES) $(EXECUTABLES)

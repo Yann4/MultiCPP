@@ -1,48 +1,5 @@
 #include "Server.h"
 
-Event Server::changeName(std::string message, Client client)
-{
-	for(int i = 0; i < clients.size(); i++)
-	{
-		if(clients.at(i).id == client.id)
-		{
-			//Position 5 should be the beginning of the next word after "/Name"
-			clients.at(i).name = message.substr(5, std::string::npos);
-			std::string shout = "[" + std::to_string(client.id) + "] has changed their name to " + clients.at(i).name;
-			broadcast(Message(shout, -1));
-			return NAME;
-		}
-	}
-	return SPEAK;
-}
-
-Event Server::clientExit(std::string message, Client client)
-{
-	broadcast(Message(getClientIdentifier(client.id) + " has left.", -1));
-	return QUIT;
-}
-
-Event Server::sendHelpText(std::string message, Client client)
-{
-	std::string helpText = "Welcome to the server. There are several commands that you can use.\n/Name [NewName here] changes your name\n/Quit to exit\n/Help to see this help text";
-	whisper(Message(helpText, client.id));
-	return HELP;
-}
-
-Event Server::handleMessage(std::string message, Client client)
-{
-	for(auto val : actions)
-	{
-		if(message.find(val.first) != std::string::npos)
-		{
-			return val.second(message, client);
-		}
-	}
-
-	broadcast(Message(message, client.id));
-	return SPEAK;
-}
-
 Server::Server()
 {
 	WSADATA wsaData;
@@ -68,7 +25,10 @@ Server::Server()
 
 Server::~Server()
 {
-	runThread.join();
+	if(run.load())
+	{
+		shutdownServer();
+	}
 }
 
 void Server::update()
@@ -83,24 +43,17 @@ void Server::update()
 	WSACleanup();
 }
 
-std::string Server::getClientIdentifier(int clientID)
+void Server::shutdownServer()
 {
-	for(Client cli : clients)
+	run.store(false);
+	runThread.join();
+	for(int i = 0; i < clientThreads.size(); ++i)
 	{
-		if(cli.id == clientID)
-		{
-			if(!cli.name.empty())
-			{
-				return cli.name;
-			}else
-			{
-				return std::to_string(clientID);
-			}
-		}
+		clientThreads.at(i).join();
 	}
-	return "Server";
 }
 
+//Messaging
 void Server::broadcast(Message message)
 {
 	std::string mess = getClientIdentifier(message.senderID) + ": " + message.data + "\0";
@@ -128,6 +81,7 @@ void Server::whisper(Message message)
 	}
 }
 
+//Client handlers
 void Server::handleClient(Client client)
 {
 	std::string message = "";
@@ -194,16 +148,92 @@ bool Server::getNewClient(SOCKET toListen)
 	//Accept a connection
 	SOCKET clientSock = INVALID_SOCKET;
 
-	clientSock = accept(toListen, NULL, NULL);
-	if (clientSock == INVALID_SOCKET)
+	fd_set readFD;
+	FD_ZERO(&readFD);
+	FD_SET(toListen, &readFD);
+	struct timeval tv;
+	tv.tv_sec = 1;
+	tv.tv_usec = 0;
+	if(select(0, &readFD, NULL, NULL, &tv) > 0)
 	{
-		std::cerr << "accept() failed: " << WSAGetLastError();
-		closesocket(toListen);
-		WSACleanup();
-		return false;
+		if(FD_ISSET(toListen, &readFD))
+		{
+			clientSock = accept(toListen, NULL, NULL);
+		}
+		if (clientSock == INVALID_SOCKET)
+		{
+			std::cerr << "accept() failed: " << WSAGetLastError();
+			closesocket(toListen);
+			WSACleanup();
+			return false;
+		}
+
+		Client newCli = Client("", ticketNumber++, clientSock);
+		clients.push_back(newCli);
+		clientThreads.push_back(std::thread(&Server::handleClient, this, newCli));
+		return true;
+	}
+	return false;
+}
+
+std::string Server::getClientIdentifier(int clientID)
+{
+	for(Client cli : clients)
+	{
+		if(cli.id == clientID)
+		{
+			if(!cli.name.empty())
+			{
+				return cli.name;
+			}else
+			{
+				return std::to_string(clientID);
+			}
+		}
+	}
+	return "Server";
+}
+
+//Event handlers
+Event Server::changeName(std::string message, Client client)
+{
+	for(int i = 0; i < clients.size(); i++)
+	{
+		if(clients.at(i).id == client.id)
+		{
+			//Position 5 should be the beginning of the next word after "/Name"
+			clients.at(i).name = message.substr(5, std::string::npos);
+			std::string shout = "[" + std::to_string(client.id) + "] has changed their name to " + clients.at(i).name;
+			broadcast(Message(shout, -1));
+			return NAME;
+		}
+	}
+	return SPEAK;
+}
+
+Event Server::clientExit(std::string message, Client client)
+{
+	broadcast(Message(getClientIdentifier(client.id) + " has left.", -1));
+	return QUIT;
+}
+
+Event Server::sendHelpText(std::string message, Client client)
+{
+	std::string helpText = "Welcome to the server. There are several commands that you can use.\n/Name [NewName here] changes your name\n/Quit to exit\n/Help to see this help text";
+	whisper(Message(helpText, client.id));
+	return HELP;
+}
+
+Event Server::handleMessage(std::string message, Client client)
+{
+	for(auto val : actions)
+	{
+		if(message.find(val.first) != std::string::npos)
+		{
+			return val.second(message, client);
+		}
 	}
 
-	Client newCli = Client("", ticketNumber++, clientSock);
-	clients.push_back(newCli);
-	clientThreads.push_back(std::thread(&Server::handleClient, this, newCli));
+	broadcast(Message(message, client.id));
+	return SPEAK;
 }
