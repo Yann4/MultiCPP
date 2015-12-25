@@ -46,11 +46,12 @@ void Server::update()
 void Server::shutdownServer()
 {
 	run.store(false);
-	runThread.join();
 	for(int i = 0; i < clientThreads.size(); ++i)
 	{
 		clientThreads.at(i).join();
+		std::cout << "Joined thread " << i << std::endl;
 	}
+	runThread.join();
 }
 
 //Messaging
@@ -104,7 +105,7 @@ void Server::handleClient(Client client)
 	//Shutdown sending data (from client's perspective)
 	if (shutdown(client.sock, SD_SEND) == SOCKET_ERROR)
 	{
-		std::cerr << "shutdown() failed: " << WSAGetLastError();
+		std::cerr << "shutdown() failed: " << WSAGetLastError() << std::endl;
 		closesocket(client.sock);
 		WSACleanup();
 
@@ -148,32 +149,32 @@ bool Server::getNewClient(SOCKET toListen)
 	//Accept a connection
 	SOCKET clientSock = INVALID_SOCKET;
 
-	fd_set readFD;
+	fd_set readFD, writeFD, exceptFD;
 	FD_ZERO(&readFD);
 	FD_SET(toListen, &readFD);
-	struct timeval tv;
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
+
+	struct timeval tv = {0, 0};
+	//If there is something waiting on the socket in the next [timeval] seconds, check that it's an incoming connection then accept it
 	if(select(0, &readFD, NULL, NULL, &tv) > 0)
 	{
 		if(FD_ISSET(toListen, &readFD))
 		{
 			clientSock = accept(toListen, NULL, NULL);
-		}
-		if (clientSock == INVALID_SOCKET)
-		{
-			std::cerr << "accept() failed: " << WSAGetLastError();
-			closesocket(toListen);
-			WSACleanup();
-			return false;
-		}
+			if (clientSock == INVALID_SOCKET)
+			{
+				std::cerr << "accept() failed: " << WSAGetLastError();
+				closesocket(toListen);
+				WSACleanup();
+				return false;
+			}
 
-		Client newCli = Client("", ticketNumber++, clientSock);
-		clients.push_back(newCli);
-		clientThreads.push_back(std::thread(&Server::handleClient, this, newCli));
-		return true;
+			Client newCli = Client("", ticketNumber++, clientSock);
+			clients.push_back(newCli);
+			clientThreads.push_back(std::thread(&Server::handleClient, this, newCli));
+			return true;
+		}
 	}
-	return false;
+	return true;
 }
 
 std::string Server::getClientIdentifier(int clientID)
