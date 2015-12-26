@@ -15,9 +15,13 @@ Server::Server()
 
 	//Set up map of actions. The map uses a string as the key and an
 	//std::function<Event(string, Client)> as the value
-	actions["/Name"] = std::bind(&Server::changeName, this, std::placeholders::_1, std::placeholders::_2);
+	/*actions["/Name"] = std::bind(&Server::changeName, this, std::placeholders::_1, std::placeholders::_2);
 	actions["/Quit"] = std::bind(&Server::clientExit, this, std::placeholders::_1, std::placeholders::_2);
 	actions["/Help"] = std::bind(&Server::sendHelpText, this, std::placeholders::_1, std::placeholders::_2);
+*/
+	Actions::setAction("/Name", std::bind(&Server::changeName, this, std::placeholders::_1, std::placeholders::_2));
+	Actions::setAction("/Quit", std::bind(&Server::clientExit, this, std::placeholders::_1, std::placeholders::_2));
+	Actions::setAction("/Help", std::bind(&Server::sendHelpText, this, std::placeholders::_1, std::placeholders::_2));
 
 	run.store(true);
 	runThread = std::thread(&Server::update, this);
@@ -49,7 +53,6 @@ void Server::shutdownServer()
 	for(int i = 0; i < clientThreads.size(); ++i)
 	{
 		clientThreads.at(i).join();
-		std::cout << "Joined thread " << i << std::endl;
 	}
 	runThread.join();
 }
@@ -87,16 +90,16 @@ void Server::handleClient(Client client)
 {
 	std::string message = "";
 	bool success = true;
-	Event event = ENTER;
+	Actions::Event event = Actions::Event::ENTER;
 
-	while(success && event != QUIT && run.load())
+	while(success && event != Actions::Event::QUIT && run.load())
 	{
 		message = "";
 		success = Socket::listenTo(client.sock, message);
 
 		if(success)
 		{
-			std::cout << client.id << ": " << message << std::endl;
+			std::cout << getClientIdentifier(client.id) << ": " << message << std::endl;
 			event = handleMessage(message, client);
 		}
 	}
@@ -196,45 +199,50 @@ std::string Server::getClientIdentifier(int clientID)
 }
 
 //Event handlers
-Event Server::changeName(std::string message, Client client)
+Actions::Event Server::changeName(std::string message, Client client)
 {
 	for(int i = 0; i < clients.size(); i++)
 	{
 		if(clients.at(i).id == client.id)
 		{
 			//Position 5 should be the beginning of the next word after "/Name"
-			clients.at(i).name = message.substr(5, std::string::npos);
-			std::string shout = "[" + std::to_string(client.id) + "] has changed their name to " + clients.at(i).name;
+			clients.at(i).name = message.substr(6, std::string::npos);
+			std::string shout = "[" + std::to_string(clients.at(i).id) + "] has changed their name to " + clients.at(i).name;
 			broadcast(Message(shout, -1));
-			return NAME;
+			return Actions::Event::NAME;
 		}
 	}
-	return SPEAK;
+	return Actions::Event::SPEAK;
 }
 
-Event Server::clientExit(std::string message, Client client)
+Actions::Event Server::clientExit(std::string message, Client client)
 {
 	broadcast(Message(getClientIdentifier(client.id) + " has left.", -1));
-	return QUIT;
+	return Actions::Event::QUIT;
 }
 
-Event Server::sendHelpText(std::string message, Client client)
+Actions::Event Server::sendHelpText(std::string message, Client client)
 {
 	std::string helpText = "Welcome to the server. There are several commands that you can use.\n/Name [NewName here] changes your name\n/Quit to exit\n/Help to see this help text";
 	whisper(Message(helpText, client.id));
-	return HELP;
+	return Actions::Event::HELP;
 }
 
-Event Server::handleMessage(std::string message, Client client)
+Actions::Event Server::handleMessage(std::string message, Client client)
 {
-	for(auto val : actions)
+	/*for(auto val : actions)
 	{
 		if(message.find(val.first) != std::string::npos)
 		{
 			return val.second(message, client);
 		}
+	}*/
+	auto func = Actions::getAction(message);
+	if(func != nullptr)
+	{
+		return func(message, client);
 	}
 
 	broadcast(Message(message, client.id));
-	return SPEAK;
+	return Actions::Event::SPEAK;
 }
